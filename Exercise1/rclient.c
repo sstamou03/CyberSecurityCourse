@@ -124,7 +124,7 @@ int main(int argc, char *argv[])
     //1
     ctx = InitCTX();
     //2
-    LoadCertificates(ctx, "rclient.crt", "rclient.key");
+    LoadCertificates(ctx, "rogue_client.crt", "rogue_client.key");
 
     server = OpenConnection(hostname, port);
     ssl = SSL_new(ctx);

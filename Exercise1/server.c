@@ -135,6 +135,8 @@ void Servlet(SSL* ssl) {
 
     if (SSL_accept(ssl) == FAIL) {
         ERR_print_errors_fp(stderr);
+        fprintf(stderr,
+            "Server response: peer did not return a certificate or returned an invalid one\n");
         return;
     }
 
@@ -214,7 +216,7 @@ int main(int argc, char *argv[]) {
         SSL *ssl;
 
         int client = accept(server, (struct sockaddr*)&addr, &len);
-        printf("Connection from %s:%d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
+        printf("\nConnection from %s:%d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
 
         /* TODO:
          * 1. Create new SSL object from ctx
