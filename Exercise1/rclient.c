@@ -65,14 +65,13 @@ SSL_CTX* InitCTX(void)
     }
 
     //3
-        //3
-    if(SSL_CTX_load_verify_locations(ctx, "rogue_ca.crt", NULL) == 0){
+    if(SSL_CTX_load_verify_locations(ctx, "ca.crt", NULL) == 0){
         ERR_print_errors_fp(stderr);
         abort();
     }
 
     //4
-    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
 
     return ctx;
 }
