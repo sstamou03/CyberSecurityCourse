@@ -66,13 +66,13 @@ SSL_CTX* InitCTX(void)
 
     //3
         //3
-    if(SSL_CTX_load_verify_locations(ctx, "ca.crt", NULL) == 0){
+    if(SSL_CTX_load_verify_locations(ctx, "rogue_ca.crt", NULL) == 0){
         ERR_print_errors_fp(stderr);
         abort();
     }
 
     //4
-    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, NULL);
 
     return ctx;
 }
@@ -124,13 +124,14 @@ int main(int argc, char *argv[])
     //1
     ctx = InitCTX();
     //2
-    LoadCertificates(ctx, "client.crt", "client.key");
+    LoadCertificates(ctx, "rclient.crt", "rclient.key");
 
     server = OpenConnection(hostname, port);
     ssl = SSL_new(ctx);
     SSL_set_fd(ssl, server);
 
     /* TODO:
+ /* TODO:
      * 1. Establish SSL connection using SSL_connect
      * 2. Ask user to enter username and password
      * 3. Build XML message dynamically
