@@ -62,3 +62,16 @@ openssl req -new -newkey rsa:2048 -nodes -keyout rogue_client.key -out rogue_cli
 
 openssl x509 -req -in rogue_client.csr -CA rogue_ca.crt -CAkey rogue_ca.key -CAcreateserial -out rogue_client.crt -days 365 -sha256
 
+## Q&A
+
+### 1.​ First run the server. Example: ./server 8082
+#### a.​ What is the number 8082?
+      Is the port where the server listens. 
+#### b.​ Can you run it on number 80, 443, 124? How can you achieve it?
+      Ports below 1024 are reserved. We can bind the reserved ports if we are the root user.
+
+### 2.​ Then run the client. Example: ./client 127.0.0.1 8082
+#### a.​ What is 127.0.0.1?
+      Is the localhost, the IP address that refers to our own computer.
+#### b.​ What is 8082?
+      This is the port that the client tries to connect to.
