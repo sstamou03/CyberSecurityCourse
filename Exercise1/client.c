@@ -157,15 +157,15 @@ int main(int argc, char *argv[])
      }
      //2
      else {
-        printf("Successfully connected.Blyat!");
+        printf("Successfully connected.Blyat!\n");
 
         char username[100];
         char password[100];
 
-        printf("Enter your username:");
+        printf("\nEnter your username:");
         scanf("%99s", username);
 
-        printf("Enter your password");
+        printf("\nEnter your password:");
         scanf("%99s", password);
 
         //3
