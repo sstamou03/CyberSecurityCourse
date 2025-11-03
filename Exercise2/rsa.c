@@ -205,6 +205,89 @@ int data_encrypt(char *input_file, char* output_file, char* keys_file){
 
 }
 
+int data_decrypt(char *input_file, char* output_file, char* keys_file){
+    // check for correct arguments
+    if (input_file == NULL || output_file == NULL || keys_file == NULL) {
+        fprintf(stderr, "Error Blyat! Decryption requires -i, -o, and -k arguments.\n");
+        return 1;
+    }
+
+    //gmp init 
+    mpz_t C, M, n, d;
+    mpz_inits(C, M, n, d, NULL);
+
+    //read private key
+    FILE *key_file = fopen(keys_file, "r");
+    if (key_file == NULL) {
+        fprintf(stderr, "Error Blyat! Could not open private key file: %s\n", keys_file);
+        mpz_clears(C, M, n, d, NULL);
+        return 1;
+    }
+
+    // n
+    if (gmp_fscanf(key_file, "%Zd", n) != 1) {
+        fprintf(stderr, "Error Blyat! Could not read 'n' from key file.\n");
+        fclose(key_file);
+        mpz_clears(C, M, n, d, NULL);
+        return 1;
+    }
+    //read k
+    if (gmp_fscanf(key_file, "%Zd", d) != 1) {
+        fprintf(stderr, "Error Blyat! Could not read 'd' from key file.\n");
+        fclose(key_file);
+        mpz_clears(C, M, n, d, NULL);
+        return 1;
+    }
+    fclose(key_file);
+
+    //read input -i
+    FILE *in_file = fopen(input_file, "r");
+    if (in_file == NULL) {
+        fprintf(stderr, "Error Blyat! Could not open input file: %s\n", input_file);
+        mpz_clears(C, M, n, d, NULL);
+        return 1;
+    }
+
+    //find c -> (Ciphertex)
+    if (gmp_fscanf(in_file, "%Zd", C) != 1) {
+        fprintf(stderr, "Error Blyat! Could not read ciphertext 'C' from input file.\n");
+        fclose(in_file);
+        mpz_clears(C, M, n, d, NULL);
+        return 1;
+    }
+    fclose(in_file);
+
+    // RSA encryption;make M
+    //M = C^d mod n
+    mpz_powm(M, C, d, n);
+
+    //make M -> text; save it 
+    FILE *out_file = fopen(output_file, "wb"); 
+    if (out_file == NULL) {
+        fprintf(stderr, "Error Blyat! Could not open output file: %s\n", output_file);
+        mpz_clears(C, M, n, d, NULL);
+        return 1;
+    }
+
+    // put M in a buffer 
+    size_t buffer_size;
+    unsigned char *buffer = mpz_export(NULL, &buffer_size, 1, 1, 0, 0, M);
+
+// write the buffer to the output file
+if (fwrite(buffer, 1, buffer_size, out_file) != buffer_size) {
+        fprintf(stderr, "Error Blyat! Failed to write decrypted data to output file.\n");
+    }
+
+fclose(out_file);
+free(buffer);
+mpz_clears(C, M, n, d, NULL);
+
+printf("Ha Blyat! Get decrypted ");
+return 0;
+
+}
+
+
 int main(int argc, char *argv[]){
 
 sodium_init();
@@ -272,7 +355,7 @@ while ((opt = getopt(argc, argv, "i:o:k:g:desv:ah")) != -1) {
     } 
     else if (d_opt) {
         printf("Mode: Decrypt\n");
-        // ΕΔΩ ΘΑ ΚΑΛΕΣΕΙΣ: do_decrypt(input_file, output_file, keys_file);
+        data_decrypt(input_file, output_file, keys_file);
     }
     else if (s_opt) {
         printf("Mode: Sign\n");
