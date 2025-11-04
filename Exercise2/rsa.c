@@ -6,6 +6,8 @@
 #include <sodium.h> 
 #include <gmp.h>
 #include <time.h>
+#include <sys/time.h>   // For getrusage
+#include <sys/resource.h> // For getrusage
 
 void printer(){
     printf("Options:\n");
@@ -273,20 +275,329 @@ int data_decrypt(char *input_file, char* output_file, char* keys_file){
     size_t buffer_size;
     unsigned char *buffer = mpz_export(NULL, &buffer_size, 1, 1, 0, 0, M);
 
-// write the buffer to the output file
-if (fwrite(buffer, 1, buffer_size, out_file) != buffer_size) {
-        fprintf(stderr, "Error Blyat! Failed to write decrypted data to output file.\n");
-    }
+    // write the buffer to the output file
+    if (fwrite(buffer, 1, buffer_size, out_file) != buffer_size) {
+            fprintf(stderr, "Error Blyat! Failed to write decrypted data to output file.\n");
+        }
 
-fclose(out_file);
-free(buffer);
-mpz_clears(C, M, n, d, NULL);
+    fclose(out_file);
+    free(buffer);
+    mpz_clears(C, M, n, d, NULL);
 
-printf("Ha Blyat! Get decrypted ");
-return 0;
+    printf("Ha Blyat! Get decrypted ");
+    return 0;
 
 }
 
+int sign(char *input_file, char *output_file, char *keys_file){
+    
+    // check for correct arguments
+    if (input_file == NULL || output_file == NULL || keys_file == NULL) {
+        fprintf(stderr, "Error Blyat! Signing requires -i, -o, and -k arguments.\n");
+        return 1;
+    }
+
+    // (1) read plaintext from an input file 
+    FILE *in_file = fopen(input_file, "rb"); // Read Binary
+    if (in_file == NULL) {
+        fprintf(stderr, "Error Blyat! Could not open input file: %s\n", input_file);
+        return 1;
+    }
+
+    fseek(in_file, 0, SEEK_END);
+    long file_size = ftell(in_file);
+    fseek(in_file, 0, SEEK_SET);
+
+    unsigned char *buffer = malloc(file_size);
+    if (buffer == NULL) {
+        fprintf(stderr, "Error Blyat! Failed to allocate memory for buffer.\n");
+        fclose(in_file);
+        return 1;
+    }
+
+    if (fread(buffer, 1, file_size, in_file) != file_size) {
+        fprintf(stderr, "Error Blyat! Failed to read input file.\n");
+        fclose(in_file);
+        free(buffer);
+        return 1;
+    }
+    fclose(in_file);
+
+    // (2) compute the SHA-256 hash of the plaintext
+    unsigned char hash[crypto_hash_sha256_BYTES];
+    crypto_hash_sha256(hash, buffer, file_size);
+    free(buffer);
+
+
+    // (3) sign the hash using the private key (this is RSA signing: signature = hash^d mod n)
+    mpz_t H, S, n, d; 
+    mpz_inits(H, S, n, d, NULL);
+
+    // read private key (n and d)
+    FILE *k_file = fopen(keys_file, "r");
+    if (k_file == NULL) {
+        fprintf(stderr, "Error Blyat! Could not open private key file: %s\n", keys_file);
+        mpz_clears(H, S, n, d, NULL);
+        return 1;
+    }
+
+    if (gmp_fscanf(k_file, "%Zd", n) != 1) {
+        fprintf(stderr, "Error Blyat! Could not read 'n' from key file.\n");
+        fclose(k_file);
+        mpz_clears(H, S, n, d, NULL);
+        return 1;
+    }
+    if (gmp_fscanf(k_file, "%Zd", d) != 1) {
+        fprintf(stderr, "Error Blyat! Could not read 'd' from key file.\n");
+        fclose(k_file);
+        mpz_clears(H, S, n, d, NULL);
+        return 1;
+    }
+    fclose(k_file);
+
+    // Import the hash into an mpz_t
+    mpz_import(H, crypto_hash_sha256_BYTES, 1, 1, 0, 0, hash);
+
+    // Sign the hash (S = H^d mod n)
+    mpz_powm(S, H, d, n);
+
+    // (4) store the signature in an output file
+    FILE *out_file = fopen(output_file, "w");
+    if (out_file == NULL) {
+        fprintf(stderr, "Error Blyat! Could not open output file: %s\n", output_file);
+        mpz_clears(H, S, n, d, NULL);
+        return 1;
+    }
+
+    gmp_fprintf(out_file, "%Zd\n", S);
+    fclose(out_file);
+
+    // clean
+    mpz_clears(H, S, n, d, NULL);
+    
+    printf("DA BLYAT! File freaking signed.\n");
+    return 0;
+}
+
+int verify(char *input_file, char *signature_file, char *keys_file){
+
+    // check for correct arguments
+    if (input_file == NULL || signature_file == NULL || keys_file == NULL) {
+        fprintf(stderr, "Error Blyat! Verification requires -i, -v, and -k arguments.\n");
+        return 1;
+    }
+
+    // (1) read plaintext from an input file 
+    FILE *in_file = fopen(input_file, "rb"); 
+    if (in_file == NULL) {
+        fprintf(stderr, "Error Blyat! Could not open input file: %s\n", input_file);
+        return 1;
+    }
+
+    fseek(in_file, 0, SEEK_END);
+    long file_size = ftell(in_file);
+    fseek(in_file, 0, SEEK_SET);
+
+    unsigned char *buffer = malloc(file_size);
+    if (buffer == NULL) {
+        fprintf(stderr, "Error Blyat! Failed to allocate memory for buffer.\n");
+        fclose(in_file);
+        return 1;
+    }
+
+    if (fread(buffer, 1, file_size, in_file) != file_size) {
+        fprintf(stderr, "Error Blyat! Failed to read input file.\n");
+        fclose(in_file);
+        free(buffer);
+        return 1;
+    }
+    fclose(in_file);
+
+    // (2) compute the SHA-256 hash of the plaintext 
+    unsigned char original_hash[crypto_hash_sha256_BYTES];
+    crypto_hash_sha256(original_hash, buffer, file_size);
+    free(buffer); 
+
+    // gmp init
+    mpz_t S, n, e, original_hash_mpz, computed_hash_mpz;
+    mpz_inits(S, n, e, original_hash_mpz, computed_hash_mpz, NULL);
+
+    // read public key (n and e) 
+    FILE *key_file = fopen(keys_file, "r");
+    if (key_file == NULL) {
+        fprintf(stderr, "Error Blyat! Could not open public key file: %s\n", keys_file);
+        mpz_clears(S, n, e, original_hash_mpz, computed_hash_mpz, NULL);
+        return 1;
+    }
+    if (gmp_fscanf(key_file, "%Zd\n%Zd", n, e) != 2) {
+        fprintf(stderr, "Error Blyat! Could not read 'n' and 'e' from key file.\n");
+        fclose(key_file);
+        mpz_clears(S, n, e, original_hash_mpz, computed_hash_mpz, NULL);
+        return 1;
+    }
+    fclose(key_file);
+
+    // read signature from signature file 
+    FILE *sig_file = fopen(signature_file, "r");
+    if (sig_file == NULL) {
+        fprintf(stderr, "Error Blyat! Could not open signature file: %s\n", signature_file);
+        mpz_clears(S, n, e, original_hash_mpz, computed_hash_mpz, NULL);
+        return 1;
+    }
+    if (gmp_fscanf(sig_file, "%Zd", S) != 1) {
+        fprintf(stderr, "Error Blyat! Could not read signature 'S' from file.\n");
+        fclose(sig_file);
+        mpz_clears(S, n, e, original_hash_mpz, computed_hash_mpz, NULL);
+        return 1;
+    }
+    fclose(sig_file);
+
+    // (3) Verify the signature (compute: hash' = signature^e mod n) 
+    mpz_powm(computed_hash_mpz, S, e, n);
+
+    // (4, 5) compare hash' with the original hash and output
+    mpz_import(original_hash_mpz, crypto_hash_sha256_BYTES, 1, 1, 0, 0, original_hash);
+
+    if (mpz_cmp(original_hash_mpz, computed_hash_mpz) == 0) {
+        printf("Signature is VALID\n");
+    } else {
+        printf("Signature is INVALID\n");
+    }
+
+    // clean up
+    mpz_clears(S, n, e, original_hash_mpz, computed_hash_mpz, NULL);
+    return 0;
+}
+
+int performance_analysis(char *output_file){
+
+    if (output_file == NULL) {
+        fprintf(stderr, "Error Blyat! Performance analysis requires an output file (-o).\n");
+        return 1;
+    }
+
+    FILE *out_f = fopen(output_file, "w");
+    if (out_f == NULL) {
+        fprintf(stderr, "Error Blyat! Could not open output file: %s\n", output_file);
+        return 1;
+    }
+
+    printf("Running performance analysis blyaaat... This may take a moment.\n");
+
+    int key_lengths[] = {1024, 2048, 4096};
+    int num_lengths = sizeof(key_lengths) / sizeof(key_lengths[0]);
+    char *plaintext_file = "analysis_plaintext.txt";
+    char *ciphertext_file = "analysis_cipher.txt";
+    char *decrypted_file = "analysis_decrypted.txt";
+    char *signature_file = "analysis_sig.sig";
+
+    // create a dummy plaintext file to operate on
+    FILE *pt_file = fopen(plaintext_file, "w");
+    if (pt_file == NULL) {
+        fprintf(stderr, "Error Blyat! Could not create temp plaintext file.\n");
+        fclose(out_f);
+        return 1;
+    }
+    fprintf(pt_file, "test blyat! test!");
+    fclose(pt_file);
+
+    struct rusage usage; // For memory usage
+
+    for (int i = 0; i < num_lengths; i++) {
+        int key_len = key_lengths[i];
+        char key_len_str[5];
+        sprintf(key_len_str, "%d", key_len);
+
+        char pub_key_file[50];
+        char priv_key_file[50];
+        sprintf(pub_key_file, "public_%d.key", key_len);
+        sprintf(priv_key_file, "private_%d.key", key_len);
+
+        fprintf(out_f, "Key Length: %d bits\n", key_len);
+
+        // (1) Generate Keys 
+        key_generator(key_len_str);
+
+        clock_t start, end;
+        double time_taken;
+        long peak_mem; // For storing peak memory usage
+
+        // (2) Measure Encryption
+        start = clock();
+        data_encrypt(plaintext_file, ciphertext_file, pub_key_file);
+        end = clock();
+        time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
+
+        getrusage(RUSAGE_SELF, &usage);
+        peak_mem = usage.ru_maxrss; // Peak RSS in KB on Linux
+
+        fprintf(out_f, "Encryption Time: %.2fs\n", time_taken);
+
+        fprintf(out_f, "Peak Memory Usage (Encryption): %ld KB\n", peak_mem);
+
+        // (3) Measure Decryption
+        start = clock();
+        data_decrypt(ciphertext_file, decrypted_file, priv_key_file);
+        end = clock();
+        time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
+
+        getrusage(RUSAGE_SELF, &usage);
+        peak_mem = usage.ru_maxrss;
+
+        fprintf(out_f, "Decryption Time: %.2fs\n", time_taken);
+
+        fprintf(out_f, "Peak Memory Usage (Decryption): %ld KB\n", peak_mem);
+
+        // (4) Measure Signing
+        start = clock();
+        sign(plaintext_file, signature_file, priv_key_file);
+        end = clock();
+        time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
+
+        getrusage(RUSAGE_SELF, &usage);
+        peak_mem = usage.ru_maxrss;
+
+        fprintf(out_f, "Signing Time: %.2fs\n", time_taken);
+
+        fprintf(out_f, "Peak Memory Usage (Signing): %ld KB\n", peak_mem);
+
+        // (5) Measure Verification
+        start = clock();
+        verify(plaintext_file, signature_file, pub_key_file);
+        end = clock();
+        time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
+
+        getrusage(RUSAGE_SELF, &usage);
+        peak_mem = usage.ru_maxrss;
+
+        fprintf(out_f, "Verification Time: %.2fs\n", time_taken);
+
+        fprintf(out_f, "Peak Memory Usage (Verification): %ld KB\n\n", peak_mem);
+
+        // Note on Memory Usage:
+        // Measuring peak memory usage per function call in standard C is non-trivial
+        // and platform-dependent (e.g., using getrusage() on POSIX).
+        // This is often measured using external tools like /usr/bin/time -v or Valgrind.
+        // fprintf(out_f, "Peak Memory Usage (Encryption): Not Measured\n");
+        // fprintf(out_f, "Peak Memory Usage (Decryption): Not Measured\n");
+        // fprintf(out_f, "Peak Memory Usage (Signing): Not Measured\n");
+        // fprintf(out_f, "Peak Memory Usage (Verification): Not Measured\n\n");
+
+        // clean up temporary files for this iteration
+        remove(pub_key_file);
+        remove(priv_key_file);
+        remove(ciphertext_file);
+        remove(decrypted_file);
+        remove(signature_file);
+    }
+
+    // clean up the main plaintext file
+    remove(plaintext_file);
+    fclose(out_f);
+
+    printf("Analysis done BLYAAAAT! Results saved to %s\n", output_file);
+    return 0;
+}
 
 int main(int argc, char *argv[]){
 
@@ -303,7 +614,7 @@ char *key_length = NULL;
 int g_opt=0, e_opt=0, d_opt=0, s_opt=0, v_opt=0, a_opt=0;
 int opt;
 
-while ((opt = getopt(argc, argv, "i:o:k:g:desv:ah")) != -1) {
+while ((opt = getopt(argc, argv, "i:o:k:g:desv:a:h")) != -1) {
      switch (opt) {
             case 'i':
                 input_file = optarg;
@@ -324,7 +635,7 @@ while ((opt = getopt(argc, argv, "i:o:k:g:desv:ah")) != -1) {
             case 'e':
                 e_opt = 1;
                 break;
-            case 'S': 
+            case 's': 
                 s_opt = 1;
                 break;
             case 'v':
@@ -333,6 +644,7 @@ while ((opt = getopt(argc, argv, "i:o:k:g:desv:ah")) != -1) {
                 break;
             case 'a':
                 a_opt = 1;
+                output_file = optarg;
                 break;
             case 'h':
                 printer();
@@ -359,15 +671,15 @@ while ((opt = getopt(argc, argv, "i:o:k:g:desv:ah")) != -1) {
     }
     else if (s_opt) {
         printf("Mode: Sign\n");
-        // ΕΔΩ ΘΑ ΚΑΛΕΣΕΙΣ: do_sign(input_file, output_file, keys_file);
+        sign(input_file, output_file, keys_file);
     }
     else if (v_opt) {
         printf("Mode: Verify\n");
-        // ΕΔΩ ΘΑ ΚΑΛΕΣΕΙΣ: do_verify(input_file, signature_file, keys_file);
+        verify(input_file, signature_file, keys_file);
     }
     else if (a_opt) {
         printf("Mode: Performance Analysis\n");
-        // ΕΔΩ ΘΑ ΚΑΛΕΣΕΙΣ: do_analysis();
+        performance_analysis(output_file);
     }
     else {
         fprintf(stderr, "Error Blyat! No mode selected.\n");
