@@ -140,6 +140,3 @@ Show help:
 ```bash
 ./rsa_tool -h
 ```
-./rsa_tool -h
-```
-```
