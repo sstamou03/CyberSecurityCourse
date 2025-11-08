@@ -6,8 +6,9 @@
 #include <sodium.h> 
 #include <gmp.h>
 #include <time.h>
-#include <sys/time.h>   // For getrusage
-#include <sys/resource.h> // For getrusage
+#include <sys/time.h>   
+#include <sys/resource.h>
+#include <sys/wait.h> 
 
 void printer(){
     printf("Options:\n");
@@ -107,7 +108,7 @@ int key_generator(char *key_length) {
     mpz_clears(p, q, n, lambda, e, d, p_minus_1, q_minus_1, gcd, NULL);
     gmp_randclear(rstate);
 
-    printf("NIIIICE BLYAT! Keys generated successfully!");
+    printf("NIIIICE BLYAT! Keys generated successfully!\n");
     
     return 0;
   
@@ -202,7 +203,7 @@ int data_encrypt(char *input_file, char* output_file, char* keys_file){
     free(buffer);
     mpz_clears(M, C, n, e, NULL);
 
-    printf("YEEEES BLYAT! Get ciphered!");
+    printf("YEEEES BLYAT! Get ciphered!\n");
     return 0;
 
 }
@@ -284,7 +285,7 @@ int data_decrypt(char *input_file, char* output_file, char* keys_file){
     free(buffer);
     mpz_clears(C, M, n, d, NULL);
 
-    printf("Ha Blyat! Get decrypted ");
+    printf("Ha Blyat! Get decrypted \n");
     return 0;
 
 }
@@ -469,16 +470,12 @@ int verify(char *input_file, char *signature_file, char *keys_file){
     return 0;
 }
 
-int performance_analysis(char *output_file){
+/*
+int performance_analysis(){
 
-    if (output_file == NULL) {
-        fprintf(stderr, "Error Blyat! Performance analysis requires an output file (-o).\n");
-        return 1;
-    }
-
-    FILE *out_f = fopen(output_file, "w");
+    FILE *out_f = fopen("performance.txt", "w");
     if (out_f == NULL) {
-        fprintf(stderr, "Error Blyat! Could not open output file: %s\n", output_file);
+        fprintf(stderr, "Error Blyat! Could not open performance.txt for writing.\n");
         return 1;
     }
 
@@ -498,7 +495,7 @@ int performance_analysis(char *output_file){
         fclose(out_f);
         return 1;
     }
-    fprintf(pt_file, "test blyat! test!");
+    fprintf(pt_file, "blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat");
     fclose(pt_file);
 
     struct rusage usage; // For memory usage
@@ -574,15 +571,6 @@ int performance_analysis(char *output_file){
 
         fprintf(out_f, "Peak Memory Usage (Verification): %ld KB\n\n", peak_mem);
 
-        // Note on Memory Usage:
-        // Measuring peak memory usage per function call in standard C is non-trivial
-        // and platform-dependent (e.g., using getrusage() on POSIX).
-        // This is often measured using external tools like /usr/bin/time -v or Valgrind.
-        // fprintf(out_f, "Peak Memory Usage (Encryption): Not Measured\n");
-        // fprintf(out_f, "Peak Memory Usage (Decryption): Not Measured\n");
-        // fprintf(out_f, "Peak Memory Usage (Signing): Not Measured\n");
-        // fprintf(out_f, "Peak Memory Usage (Verification): Not Measured\n\n");
-
         // clean up temporary files for this iteration
         remove(pub_key_file);
         remove(priv_key_file);
@@ -595,8 +583,153 @@ int performance_analysis(char *output_file){
     remove(plaintext_file);
     fclose(out_f);
 
-    printf("Analysis done BLYAAAAT! Results saved to %s\n", output_file);
+    printf("Analysis done BLYAAAAT! Results saved to performance.txt\n");
     return 0;
+}
+*/
+
+int performance_analysis(){
+
+    FILE *out_file = fopen("performance.txt", "w");
+    if (out_file == NULL){
+        fprintf(stderr, "Error Blyat! Could not open performance.txt for writing.\n");
+        return 1;        
+    }
+
+    printf("Running performance analysis blyaaat... This may take a moment.\n");
+
+    int key_lengths[] = {1024, 2048, 4096};
+    int num_lengths = sizeof(key_lengths) / sizeof(key_lengths[0]);
+    char *plaintext_file = "analysis_plaintext.txt";
+    char *ciphertext_file = "analysis_cipher.txt";
+    char *decrypted_file = "analysis_decrypted.txt";
+    char *signature_file = "analysis_sig.sig";
+
+    FILE *pt_file = fopen(plaintext_file, "w");
+    if (pt_file == NULL) {
+        fprintf(stderr, "Error Blyat! Could not create temp plaintext file.\n");
+        fclose(out_file);
+        return 1;
+    }
+    for (int i = 0; i < 10; i++) {
+        fprintf(pt_file, "blyat "); 
+    }
+    fclose(pt_file);
+
+    pid_t pid;
+    struct rusage usage;    
+    int status;
+    double time_taken;
+    long peak_mem;
+
+    for (int i = 0; i < num_lengths; i++) {
+        int key_len = key_lengths[i];
+        char key_len_str[5];
+        sprintf(key_len_str, "%d", key_len);
+
+        char pub_key_file[50];
+        char priv_key_file[50];
+        sprintf(pub_key_file, "public_%d.key", key_len);
+        sprintf(priv_key_file, "private_%d.key", key_len);
+
+        fprintf(out_file, "Key Length: %d bits\n", key_len);
+
+        key_generator(key_len_str);
+
+        //Encryption
+        fflush(out_file);
+        pid = fork();
+        if (pid == 0) { 
+            data_encrypt(plaintext_file, ciphertext_file, pub_key_file);
+            exit(0); 
+        } else if (pid > 0) { 
+            wait4(pid, &status, 0, &usage); 
+            
+            //time
+            time_taken = (double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec / 1000000.0 + (double)usage.ru_stime.tv_sec + (double)usage.ru_stime.tv_usec / 1000000.0;
+            //memory
+            peak_mem = usage.ru_maxrss; \
+            
+            fprintf(out_file, "Encryption Time: %.4fs\n", time_taken);
+            fprintf(out_file, "Peak Memory Usage (Encryption): %ld KB\n", peak_mem);
+        } else {
+            fprintf(stderr, "Fork failed!\n");
+        }
+
+        //Decryption
+        fflush(out_file);
+        pid = fork();
+        if (pid == 0) { 
+            data_decrypt(ciphertext_file, decrypted_file, priv_key_file);
+            exit(0);
+        } else if (pid > 0) { 
+            wait4(pid, &status, 0, &usage);
+
+            //time
+            time_taken = (double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec / 1000000.0 + (double)usage.ru_stime.tv_sec + (double)usage.ru_stime.tv_usec / 1000000.0;
+            //memory
+            peak_mem = usage.ru_maxrss; 
+            
+            fprintf(out_file, "Decryption Time: %.4fs\n", time_taken);
+            fprintf(out_file, "Peak Memory Usage (Decryption): %ld KB\n", peak_mem);
+        } else {
+            fprintf(stderr, "Fork failed!\n");
+        }
+
+        //Signing
+        fflush(out_file);
+        pid = fork();
+        if (pid == 0) { 
+            sign(plaintext_file, signature_file, priv_key_file);
+            exit(0);
+        } else if (pid > 0) { 
+            wait4(pid, &status, 0, &usage);
+
+            //time
+            time_taken = (double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec / 1000000.0 + (double)usage.ru_stime.tv_sec + (double)usage.ru_stime.tv_usec / 1000000.0;
+            //memory
+            peak_mem = usage.ru_maxrss; 
+
+            fprintf(out_file, "Signing Time: %.4fs\n", time_taken);
+            fprintf(out_file, "Peak Memory Usage (Signing): %ld KB\n", peak_mem);
+        } else {
+            fprintf(stderr, "Fork failed!\n");
+        }
+
+        //Verification
+        fflush(out_file);
+        pid = fork();
+        if (pid == 0) { 
+            verify(plaintext_file, signature_file, pub_key_file);
+            exit(0);
+        } else if (pid > 0) { 
+            wait4(pid, &status, 0, &usage);
+
+            //time
+            time_taken = (double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec / 1000000.0 + (double)usage.ru_stime.tv_sec + (double)usage.ru_stime.tv_usec / 1000000.0;
+            //memory
+            peak_mem = usage.ru_maxrss; 
+
+            
+            fprintf(out_file, "Verification Time: %.4fs\n", time_taken);
+            fprintf(out_file, "Peak Memory Usage (Verification): %ld KB\n\n", peak_mem);
+        } else {
+            fprintf(stderr, "Fork failed!\n");
+        }
+
+        remove(pub_key_file);
+        remove(priv_key_file);
+        remove(ciphertext_file);
+        remove(decrypted_file);
+        remove(signature_file);
+    }
+
+    remove(plaintext_file);
+    fclose(out_file);
+
+    printf("\nAnalysis done BLYAAAAT! Results saved to performance.txt\n");
+    return 0;
+    
 }
 
 int main(int argc, char *argv[]){
@@ -614,7 +747,7 @@ char *key_length = NULL;
 int g_opt=0, e_opt=0, d_opt=0, s_opt=0, v_opt=0, a_opt=0;
 int opt;
 
-while ((opt = getopt(argc, argv, "i:o:k:g:desv:a:h")) != -1) {
+while ((opt = getopt(argc, argv, "i:o:k:g:desv:ah")) != -1) {
      switch (opt) {
             case 'i':
                 input_file = optarg;
@@ -644,7 +777,7 @@ while ((opt = getopt(argc, argv, "i:o:k:g:desv:a:h")) != -1) {
                 break;
             case 'a':
                 a_opt = 1;
-                output_file = optarg;
+                //output_file = optarg;
                 break;
             case 'h':
                 printer();
@@ -679,7 +812,7 @@ while ((opt = getopt(argc, argv, "i:o:k:g:desv:a:h")) != -1) {
     }
     else if (a_opt) {
         printf("Mode: Performance Analysis\n");
-        performance_analysis(output_file);
+        performance_analysis();
     }
     else {
         fprintf(stderr, "Error Blyat! No mode selected.\n");
