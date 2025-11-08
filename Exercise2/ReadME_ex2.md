@@ -14,7 +14,7 @@ This project consists of two separate command-line tools written in C, fulfillin
 
 ---
 
-## 2. Dependencies
+## Dependencies
 
 To compile and run these tools, you will need the following libraries:
 * **`libsodium`**: Used in both tools for cryptographic primitives (ECDH, SHA-256 hashing, KDF).
@@ -22,7 +22,7 @@ To compile and run these tools, you will need the following libraries:
 
 ---
 
-## 3. Compilation
+## Compilation
 
 A `Makefile` is also included as required by the assignment. To compile both tools, simply run:
 
@@ -138,6 +138,8 @@ Run performance analysis:
 
 Show help:
 ```bash
+./rsa_tool -h
+```
 ./rsa_tool -h
 ```
 ```
