@@ -1,6 +1,6 @@
 # Assignment 2: Cryptographic Implementations
 **Authors:** Spyros Stamous, Michail Gialousis
-**Student ID (AM):** 2021030090, 
+**Student ID (AM):** 2021030090, 2021030065
 
 ---
 
