@@ -470,124 +470,6 @@ int verify(char *input_file, char *signature_file, char *keys_file){
     return 0;
 }
 
-/*
-int performance_analysis(){
-
-    FILE *out_f = fopen("performance.txt", "w");
-    if (out_f == NULL) {
-        fprintf(stderr, "Error Blyat! Could not open performance.txt for writing.\n");
-        return 1;
-    }
-
-    printf("Running performance analysis blyaaat... This may take a moment.\n");
-
-    int key_lengths[] = {1024, 2048, 4096};
-    int num_lengths = sizeof(key_lengths) / sizeof(key_lengths[0]);
-    char *plaintext_file = "analysis_plaintext.txt";
-    char *ciphertext_file = "analysis_cipher.txt";
-    char *decrypted_file = "analysis_decrypted.txt";
-    char *signature_file = "analysis_sig.sig";
-
-    // create a dummy plaintext file to operate on
-    FILE *pt_file = fopen(plaintext_file, "w");
-    if (pt_file == NULL) {
-        fprintf(stderr, "Error Blyat! Could not create temp plaintext file.\n");
-        fclose(out_f);
-        return 1;
-    }
-    fprintf(pt_file, "blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat blyat");
-    fclose(pt_file);
-
-    struct rusage usage; // For memory usage
-
-    for (int i = 0; i < num_lengths; i++) {
-        int key_len = key_lengths[i];
-        char key_len_str[5];
-        sprintf(key_len_str, "%d", key_len);
-
-        char pub_key_file[50];
-        char priv_key_file[50];
-        sprintf(pub_key_file, "public_%d.key", key_len);
-        sprintf(priv_key_file, "private_%d.key", key_len);
-
-        fprintf(out_f, "Key Length: %d bits\n", key_len);
-
-        // (1) Generate Keys 
-        key_generator(key_len_str);
-
-        clock_t start, end;
-        double time_taken;
-        long peak_mem; // For storing peak memory usage
-
-        // (2) Measure Encryption
-        start = clock();
-        data_encrypt(plaintext_file, ciphertext_file, pub_key_file);
-        end = clock();
-        time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
-
-        getrusage(RUSAGE_SELF, &usage);
-        peak_mem = usage.ru_maxrss; // Peak RSS in KB on Linux
-
-        fprintf(out_f, "Encryption Time: %.2fs\n", time_taken);
-
-        fprintf(out_f, "Peak Memory Usage (Encryption): %ld KB\n", peak_mem);
-
-        // (3) Measure Decryption
-        start = clock();
-        data_decrypt(ciphertext_file, decrypted_file, priv_key_file);
-        end = clock();
-        time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
-
-        getrusage(RUSAGE_SELF, &usage);
-        peak_mem = usage.ru_maxrss;
-
-        fprintf(out_f, "Decryption Time: %.2fs\n", time_taken);
-
-        fprintf(out_f, "Peak Memory Usage (Decryption): %ld KB\n", peak_mem);
-
-        // (4) Measure Signing
-        start = clock();
-        sign(plaintext_file, signature_file, priv_key_file);
-        end = clock();
-        time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
-
-        getrusage(RUSAGE_SELF, &usage);
-        peak_mem = usage.ru_maxrss;
-
-        fprintf(out_f, "Signing Time: %.2fs\n", time_taken);
-
-        fprintf(out_f, "Peak Memory Usage (Signing): %ld KB\n", peak_mem);
-
-        // (5) Measure Verification
-        start = clock();
-        verify(plaintext_file, signature_file, pub_key_file);
-        end = clock();
-        time_taken = ((double)(end - start)) / CLOCKS_PER_SEC;
-
-        getrusage(RUSAGE_SELF, &usage);
-        peak_mem = usage.ru_maxrss;
-
-        fprintf(out_f, "Verification Time: %.2fs\n", time_taken);
-
-        fprintf(out_f, "Peak Memory Usage (Verification): %ld KB\n\n", peak_mem);
-
-        // clean up temporary files for this iteration
-        remove(pub_key_file);
-        remove(priv_key_file);
-        remove(ciphertext_file);
-        remove(decrypted_file);
-        remove(signature_file);
-    }
-
-    // clean up the main plaintext file
-    remove(plaintext_file);
-    fclose(out_f);
-
-    printf("Analysis done BLYAAAAT! Results saved to performance.txt\n");
-    return 0;
-}
-*/
-
 int performance_analysis(){
 
     FILE *out_file = fopen("performance.txt", "w");
@@ -636,6 +518,15 @@ int performance_analysis(){
 
         key_generator(key_len_str);
 
+        //=====================fflush()===================================
+        // Force-flush the 'out_file' buffer before fork().              =
+        //                                                               =
+        // This is critical to prevent the child process from inheriting =
+        // a non-empty buffer. If not flushed, the child would write     =
+        // the buffer's contents again upon exit, causing duplicate      =
+        // lines in the output file.                                     =
+        //================================================================
+
         //Encryption
         fflush(out_file);
         pid = fork();
@@ -648,7 +539,7 @@ int performance_analysis(){
             //time
             time_taken = (double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec / 1000000.0 + (double)usage.ru_stime.tv_sec + (double)usage.ru_stime.tv_usec / 1000000.0;
             //memory
-            peak_mem = usage.ru_maxrss; \
+            peak_mem = usage.ru_maxrss; 
             
             fprintf(out_file, "Encryption Time: %.4fs\n", time_taken);
             fprintf(out_file, "Peak Memory Usage (Encryption): %ld KB\n", peak_mem);
@@ -716,10 +607,7 @@ int performance_analysis(){
         } else {
             fprintf(stderr, "Fork failed!\n");
         }
-
-        remove(pub_key_file);
-        remove(priv_key_file);
-        remove(ciphertext_file);
+ijj
         remove(decrypted_file);
         remove(signature_file);
     }
