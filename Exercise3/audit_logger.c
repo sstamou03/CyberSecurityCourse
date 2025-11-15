@@ -49,11 +49,13 @@ char* file_hash(const char *filepath){
 
     
     static FILE*(*original_fopen)(const char*, const char*);
+
     if (!original_fopen) {
         original_fopen = dlsym(RTLD_NEXT, "fopen");
     }
 
     static int(*original_fclose)(FILE*);
+
     if (!original_fclose) {
         original_fclose = dlsym(RTLD_NEXT, "fclose");
     }
@@ -105,44 +107,36 @@ char* file_hash(const char *filepath){
 
 FILE *fopen(const char *path, const char *mode) 
 {
+    //the filename shoud be the absolute path
+
     char filename[PATH_MAX];
 
-    /* create absolute normalized filename */
     if (realpath(path, filename) == NULL) {
-        // If relative path, turn it into absolute + normalized
-        char cwd[PATH_MAX];
+        // try to build absolute path manually
+        char cwd[PATH_MAX];                                                     // current working directory
+
         if (getcwd(cwd, sizeof(cwd)) != NULL) {
             snprintf(filename, sizeof(filename), "%s/%s", cwd, path);
-        } else {
-            // fallback
-            strncpy(filename, path, PATH_MAX - 1);
-            filename[PATH_MAX - 1] = '\0';
-        }
+        } 
     }
 
-    char finalname[PATH_MAX];
-    if (realpath(filename, finalname) != NULL) {
-        strcpy(filename, finalname);
-    }
 
-    /* check if filename is the log file */
+    // check if filename is the log file
     if (strcmp(filename, LOG_FILE) == 0) {
-        FILE *(*original_fopen)(const char*, const char*) =
-            dlsym(RTLD_NEXT, "fopen");
+        FILE *(*original_fopen)(const char*, const char*) =  dlsym(RTLD_NEXT, "fopen");
         return original_fopen(path, mode);
     }
 
-    /* see if the file already exists */
     struct stat fstat;
-    int file_exists = (stat(filename, &fstat) == 0);  // FIXED: use normalized path
+    int file_exists = (stat(filename, &fstat) == 0);  //check if file exists
 
 
     FILE *original_fopen_ret;
     FILE *(*original_fopen)(const char*, const char*);
 
-    /* call the original fopen function */
+    // call the original fopen function
     original_fopen = dlsym(RTLD_NEXT, "fopen");
-    original_fopen_ret = (*original_fopen)(path, mode);
+    original_fopen_ret = (*original_fopen)(path, mode);  //here we create or open the file
 
 
     /* add your code here */
@@ -151,8 +145,8 @@ FILE *fopen(const char *path, const char *mode)
     uid_t uid = getuid();
     pid_t pid = getpid();
 
-    char date_str[11]; // YYYY-MM-DD
-    char time_str[9];  // HH:MM:SS
+    char date_str[11]; // YYYY-MM-DD + \0
+    char time_str[9];  // HH:MM:SS + \0
 
     time_t now = time(NULL);
     struct tm *utc = gmtime(&now);
@@ -178,8 +172,8 @@ FILE *fopen(const char *path, const char *mode)
 
     char *filehash = file_hash(filename);
 
-    /* open log file using original_fopen to avoid recursion */
-    FILE *log_file = original_fopen(LOG_FILE, "a"); // FIXED
+    //open log file using original_fopen to avoid recursion 
+    FILE *log_file = original_fopen(LOG_FILE, "a"); 
 
     if (log_file) {
         int log_fd = fileno(log_file);
@@ -213,12 +207,12 @@ FILE *fopen(const char *path, const char *mode)
 size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream) 
 {
 
-    /* call the original fwrite function */
-    static size_t (*original_fwrite)(const void*, size_t, size_t, FILE*) = NULL;
-    if (!original_fwrite)
-        original_fwrite = dlsym(RTLD_NEXT, "fwrite");
-    size_t original_fwrite_ret = (*original_fwrite)(ptr, size, nmemb, stream);
+    size_t original_fwrite_ret;
+    size_t (*original_fwrite)(const void*, size_t, size_t, FILE*);
 
+    /* call the original fwrite function */
+    original_fwrite = dlsym(RTLD_NEXT, "fwrite");
+    original_fwrite_ret = (*original_fwrite)(ptr, size, nmemb, stream);
 
     /* add your code here */
     uid_t uid = getuid();
@@ -231,22 +225,14 @@ size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
         return original_fwrite_ret;
     }
 
-    /* normalize to absolute path if possible */
-    char normalized[PATH_MAX];
-    if (realpath(filename, normalized) != NULL) {
-        /* overwrite the filename buffer with the normalized path */
-        /* filename was allocated with PATH_MAX in file_path() so strcpy is safe */
-        strcpy(filename, normalized);
-    }
-
-    /* if the file is the log file, do not log */
+    // check if filename is the log file
     if (strcmp(filename, LOG_FILE) == 0) {
         free(filename);
         return original_fwrite_ret;
     }
 
-    char date_str[11]; // YYYY-MM-DD
-    char time_str[9];  // HH:MM:SS
+    char date_str[11]; // YYYY-MM-DD + \0
+    char time_str[9];  // HH:MM:SS + \0
 
     time_t now = time(NULL);
     struct tm *utc = gmtime(&now);
@@ -265,10 +251,9 @@ size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 
     char *filehash = file_hash(filename);
 
-    /* open log using original fopen to avoid recursion */
-    static FILE *(*original_fopen)(const char*, const char*) = NULL;
-    if (!original_fopen)
-        original_fopen = dlsym(RTLD_NEXT, "fopen");
+    //open log using original fopen to avoid recursion
+    FILE *(*original_fopen)(const char*, const char*);
+    original_fopen = dlsym(RTLD_NEXT, "fopen");
 
     FILE *log_file = original_fopen(LOG_FILE, "a");
     if (log_file) {
@@ -285,7 +270,7 @@ size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
                 filehash ? filehash : "NULL"
         );
         flock(log_fd, LOCK_UN);
-        fclose(log_file); /* close the log (we opened it via original_fopen) */
+        fclose(log_file); //close the log 
     }
 
     free(filename);
@@ -300,26 +285,22 @@ int fclose(FILE *stream)
 {
     char *filename = file_path(stream);// we call it first to get the filename before closing the stream
 
-    /* load original fclose */
-    static int (*original_fclose)(FILE*) = NULL;
-    if (!original_fclose)
-        original_fclose = dlsym(RTLD_NEXT, "fclose");
+    int original_fclose_ret;
+    int (*original_fclose)(FILE*);
 
-    /* if filename could not be resolved → just close normally */
+    /* call the original fclose function */
+    original_fclose = dlsym(RTLD_NEXT, "fclose");
+
+    /* add your code here */
+
+    //close if filename does not exist
     if (filename == NULL) {
         return original_fclose(stream);
     }
 
-    /* normalize filename */
-    char normalized[PATH_MAX];
-    if (realpath(filename, normalized) != NULL) {
-        strcpy(filename, normalized);   // safe: file_path allocated PATH_MAX
-    }
+    original_fclose_ret = (*original_fclose)(stream);
 
-    /* now close the file */
-    int original_fclose_ret = original_fclose(stream);
-
-    /* do not log operations on the log file */
+    //check if filename is the log file
     if (strcmp(filename, LOG_FILE) == 0) {
         free(filename);
         return original_fclose_ret;
@@ -329,8 +310,8 @@ int fclose(FILE *stream)
     uid_t uid = getuid();
     pid_t pid = getpid();
 
-    char date_str[11]; // YYYY-MM-DD
-    char time_str[9];  // HH:MM:SS
+    char date_str[11]; // YYYY-MM-DD + \0
+    char time_str[9];  // HH:MM:SS + \0
 
     time_t now = time(NULL);
     struct tm *utc = gmtime(&now);
@@ -343,10 +324,8 @@ int fclose(FILE *stream)
 
     char *filehash = file_hash(filename);
 
-    /* open log file with ORIGINAL fopen to avoid recursion */
-    static FILE *(*original_fopen)(const char*, const char*) = NULL;
-    if (!original_fopen)
-        original_fopen = dlsym(RTLD_NEXT, "fopen");
+    FILE *(*original_fopen)(const char*, const char*);
+    original_fopen = dlsym(RTLD_NEXT, "fopen");
 
     FILE *log_file = original_fopen(LOG_FILE, "a");
     if (log_file) {
