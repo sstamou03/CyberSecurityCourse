@@ -320,7 +320,15 @@ int fclose(FILE *stream)
     strftime(time_str, sizeof(time_str), "%H:%M:%S", utc);
 
     int operation = 3; // close
-    int denied_flag = (original_fclose_ret != 0);
+
+    int denied_flag;
+    if(original_fclose_ret != 0){
+        //error on close
+        denied_flag = 1;
+    }
+    else{
+        denied_flag = 0;
+    }
 
     char *filehash = file_hash(filename);
 
