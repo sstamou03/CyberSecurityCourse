@@ -322,12 +322,13 @@ int fclose(FILE *stream)
     int operation = 3; // close
 
     int denied_flag;
-    if(original_fclose_ret != 0){
-        //error on close
-        denied_flag = 1;
-    }
-    else{
+
+    if (original_fclose_ret == 0){
         denied_flag = 0;
+    }
+    else
+    {
+        denied_flag = 1;
     }
 
     char *filehash = file_hash(filename);
@@ -340,9 +341,13 @@ int fclose(FILE *stream)
         int log_fd = fileno(log_file);
         flock(log_fd, LOCK_EX);
         fprintf(log_file, "%d,%d,%s,%s,%s,%d,%d,%s\n",
-                uid, pid, filename,
-                date_str, time_str,
-                operation, denied_flag,
+                uid, 
+                pid, 
+                filename,
+                date_str, 
+                time_str,
+                operation, 
+                denied_flag,
                 filehash ? filehash : "NULL");
         flock(log_fd, LOCK_UN);
         fclose(log_file);
