@@ -27,7 +27,7 @@ This library uses the **`LD_PRELOAD`** mechanism to intercept standard C library
     * **Concurrency:** We use `flock(LOCK_EX)` and `flock(LOCK_UN)` to acquire an exclusive lock on the log file before every write. This prevents race conditions where two concurrent processes might corrupt the log by writing at the same time. The log file is also opened in append mode to prevent overwriting. [cite: 26]
     * **Recursion:** To prevent the logger from trying to log its own actions (which would cause an infinite loop), we check if the `filename` being opened is the `LOG_FILE` itself. If it is, we call the "real" `fopen` (found via `dlsym(RTLD_NEXT, ...)`), bypassing all logging logic.
 
-### 🖥️ audit_monitor.c (The Analyzer)
+### audit_monitor.c 
 
 This is a command-line tool that parses the `access_audit.log` and provides two features:
 
