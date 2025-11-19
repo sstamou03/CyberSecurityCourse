@@ -128,7 +128,7 @@ FILE *fopen(const char *path, const char *mode)
     }
 
     struct stat fstat;
-    int file_exists = (stat(filename, &fstat) == 0);  //check if file exists
+    int file_exists = (stat(filename, &fstat) == 0);  //check if file exists -1 (not exist)
 
 
     FILE *original_fopen_ret;
@@ -241,6 +241,10 @@ size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
     strftime(time_str, sizeof(time_str), "%H:%M:%S", utc);
 
     int operation = 2; // write
+
+    if (nmemb == 0){
+        return original_fwrite_ret;
+    }
 
     int denied_flag;
     if (original_fwrite_ret == 0 && nmemb > 0) {
